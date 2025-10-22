@@ -62,5 +62,4 @@ Ejecute `--demo` para observar resultados con tiempos y árboles.
 - Soportar gramáticas cargadas desde JSON/YAML.
 - Enumerar múltiples árboles si la oración es ambigua.
 
-## Licencia
-Uso académico.
+
