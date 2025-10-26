@@ -38,6 +38,52 @@ python proyecto2_cyk.py --sentence "She eats a cake with a fork" --lower
 
 **Nota sobre mayúsculas:** la gramática usa terminales en minúsculas. Use `--lower` para bajar la frase a minúsculas.
 
+### Cargar una gramática propia (opcional)
+Ahora el programa acepta una gramática externa mediante `--grammar` (texto o JSON). Ejemplos:
+
+```bash
+# Usando un archivo de texto
+python proyecto2_cyk.py --grammar grammar_example.txt --sentence "she eats a cake" --lower
+
+# Usando JSON
+python proyecto2_cyk.py --grammar grammar_example.json --demo
+```
+
+Formato de texto soportado:
+
+```
+Start: S
+S  -> NP VP
+VP -> VP PP | V NP | cooks | drinks | eats | cuts
+PP -> P NP
+NP -> Det N | he | she
+V  -> cooks | drinks | eats | cuts
+P  -> in | with
+N  -> cat | dog | beer | cake | juice | meat | soup | fork | knife | oven | spoon
+Det-> a | the
+```
+
+- La línea `Start:` es opcional; si se omite, se toma el primer LHS como símbolo inicial.
+- Use `ε` para epsilon si desea incluir producciones vacías (por ejemplo, `A -> ε`).
+
+Formato JSON (equivalente):
+
+```json
+{
+  "start": "S",
+  "rules": {
+    "S": [["NP", "VP"]],
+    "VP": [["VP", "PP"], ["V", "NP"], ["cooks"], ["drinks"], ["eats"], ["cuts"]],
+    "PP": [["P", "NP"]],
+    "NP": [["Det", "N"], ["he"], ["she"]],
+    "V": [["cooks"], ["drinks"], ["eats"], ["cuts"]],
+    "P": [["in"], ["with"]],
+    "N": [["cat"], ["dog"], ["beer"], ["cake"], ["juice"], ["meat"], ["soup"], ["fork"], ["knife"], ["oven"], ["spoon"]],
+    "Det": [["a"], ["the"]]
+  }
+}
+```
+
 ## Diseño y decisiones
 - **Representación:** `CFG` con `productions: Dict[Variable, Set[Tuple[Symbol,...]]]`.
 - **CNF:** se aplican pasos estándar: `S0→S`, eliminación de `ε` (manteniendo `S0→ε` si corresponde), eliminación de unitarias,

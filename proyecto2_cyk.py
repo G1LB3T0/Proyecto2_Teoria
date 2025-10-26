@@ -52,6 +52,8 @@ from dataclasses import dataclass, field
 from typing import Dict, List, Set, Tuple, Iterable, Optional
 import argparse
 import time
+import json
+import os
 
 
 # ---------------------------
@@ -523,8 +525,9 @@ def time_cyk(cnf: CFG, sentence: str, force_lower: bool = False) -> Tuple[bool, 
 #   Casos de prueba del informe
 # ---------------------------------------
 
-def demo_cases(force_lower: bool = True) -> None:
-    cfg = default_cfg()
+def demo_cases(cfg: Optional[CFG] = None, force_lower: bool = True) -> None:
+    if cfg is None:
+        cfg = default_cfg()
     cnf = cfg_to_cnf(cfg)
 
     print(pretty_grammar(cfg, "CFG original"))
@@ -575,18 +578,101 @@ def demo_cases(force_lower: bool = True) -> None:
 #   CLI
 # ---------------------------------------
 
+def parse_cfg_text(content: str) -> CFG:
+    """Parsea una gramática desde texto simple.
+    Formato soportado:
+      - Línea de inicio opcional:  Start: S   (o start: S)
+      - Producciones: A -> rhs1 | rhs2 | ...
+        Donde cada rhs es una secuencia de símbolos separados por espacio. Usar "ε" para epsilon.
+
+    Ejemplo:
+      Start: S
+      S  -> NP VP
+      VP -> VP PP | V NP | eats | drinks
+      NP -> Det N | he | she
+    """
+    rules: Dict[str, List[List[str]]] = {}
+    start: Optional[str] = None
+
+    lines = content.splitlines()
+    for raw in lines:
+        line = raw.strip()
+        if not line or line.startswith("#") or line.startswith("//"):
+            continue
+        # Start: X
+        lower = line.lower()
+        if lower.startswith("start:"):
+            start = line.split(":", 1)[1].strip()
+            continue
+        # A -> ...
+        if "->" not in line:
+            continue
+        lhs, rhs_part = line.split("->", 1)
+        A = lhs.strip()
+        if not start:
+            start = A
+        alts = [alt.strip() for alt in rhs_part.split("|")]
+        bucket = rules.setdefault(A, [])
+        for alt in alts:
+            if alt == "" or alt.lower() == "epsilon":
+                bucket.append(["ε"])  # representamos epsilon explícitamente como "ε"
+            else:
+                symbols = alt.split()
+                bucket.append(symbols if symbols else ["ε"])
+
+    if not rules:
+        raise ValueError("No se encontraron producciones en el archivo de gramática de texto.")
+    if not start:
+        # elegir el primero definido
+        start = next(iter(rules.keys()))
+    return CFG.from_rules(start=start, rules=rules)
+
+
+def load_cfg_from_file(path: str) -> CFG:
+    """Carga una CFG desde un archivo. Intenta JSON si parece JSON; en caso contrario, formato texto."""
+    with open(path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    # Intento JSON si empieza con { o si la extensión es .json
+    looks_json = content.lstrip().startswith("{") or path.lower().endswith(".json")
+    if looks_json:
+        try:
+            data = json.loads(content)
+            if isinstance(data, dict) and "rules" in data and "start" in data:
+                rules = data["rules"]
+                start = data["start"]
+                if not isinstance(rules, dict) or not isinstance(start, str):
+                    raise ValueError("JSON de gramática inválido: tipos no válidos para 'rules' o 'start'.")
+                return CFG.from_rules(start=start, rules=rules)
+        except json.JSONDecodeError:
+            # caer a texto plano
+            pass
+
+    # Texto plano
+    return parse_cfg_text(content)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Proyecto 2: CFG→CNF + CYK + Parse Tree")
     parser.add_argument("--sentence", "-s", type=str, default=None, help="Frase a validar")
     parser.add_argument("--demo", action="store_true", help="Ejecuta casos de prueba predefinidos")
     parser.add_argument("--lower", action="store_true", help="Fuerza a minúsculas la frase de entrada")
+    parser.add_argument("--grammar", "-g", type=str, default=None, help="Ruta a un archivo de gramática (texto o JSON)")
     args = parser.parse_args()
 
-    cfg = default_cfg()
+    # Cargar gramática
+    cfg: CFG
+    if args.grammar:
+        if not os.path.exists(args.grammar):
+            raise FileNotFoundError(f"No se encontró el archivo de gramática: {args.grammar}")
+        cfg = load_cfg_from_file(args.grammar)
+    else:
+        cfg = default_cfg()
     cnf = cfg_to_cnf(cfg)
 
     if args.demo or args.sentence is None:
-        demo_cases(force_lower=True or args.lower)
+        # Usar la misma gramática para los casos de demo si fue proporcionada
+        demo_cases(cfg=cfg, force_lower=True or args.lower)
         return
 
     s = args.sentence
